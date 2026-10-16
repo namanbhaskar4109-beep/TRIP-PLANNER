@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { TripPlan, Accommodation, Expense, PlaceItem } from './types/trip';
+import { TripPlan, Accommodation, Expense } from './types/trip';
 import {
   loadTripFromStorage,
   saveTripToStorage,
@@ -21,14 +21,19 @@ import { AccommodationSection } from './components/accommodations/AccommodationS
 import { PlacesSection } from './components/places/PlacesSection';
 import { ExpenseTracker } from './components/expenses/ExpenseTracker';
 import { Footer } from './components/common/Footer';
-import { CheckCircle2, X } from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './components/auth/AuthModal';
+import { AtlasConnectionModal } from './components/auth/AtlasConnectionModal';
+import { CheckCircle2, X, Cloud, ArrowUpRight, Database } from 'lucide-react';
+import { fetchLatestAtlasTrip } from './services/apiClient';
 
-export function App() {
+function TripPlannerMain() {
   const [trip, setTrip] = useState<TripPlan>(loadTripFromStorage);
   const [expenses, setExpenses] = useState<Expense[]>(loadExpensesFromStorage);
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const { isAuthenticated, user, atlasStatus, openAtlasModal } = useAuth();
   const searchFormRef = useRef<HTMLDivElement>(null);
 
   // Sync to localStorage whenever state changes
@@ -52,6 +57,28 @@ export function App() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
   };
+
+  // If user signs in and has a saved trip in MongoDB Atlas, offer to load it
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let isSubscribed = true;
+    async function loadCloudTrip() {
+      try {
+        const res = await fetchLatestAtlasTrip();
+        if (res.success && res.data && isSubscribed) {
+          showToast(`Welcome back, ${user?.name || 'Traveler'}! Cloud sync active.`);
+        }
+      } catch (err) {
+        // Silent fallback
+      }
+    }
+
+    loadCloudTrip();
+    return () => {
+      isSubscribed = false;
+    };
+  }, [isAuthenticated, user]);
 
   // Generate sample data based on current destination
   const accommodations = useMemo(() => {
@@ -169,9 +196,12 @@ export function App() {
       <Navbar
         destination={trip.destination}
         savedPlacesCount={trip.savedPlaceIds.length}
+        currentTrip={trip}
+        currentExpenses={expenses}
         onResetToDemo={handleResetToDemo}
         onScrollToSearch={scrollToSearch}
         onScrollToExpenses={() => scrollToSection('expenses')}
+        onToast={showToast}
       />
 
       {/* Main Dashboard Container */}
@@ -245,6 +275,12 @@ export function App() {
       {/* Footer */}
       <Footer />
 
+      {/* Auth Modal (Sign In / Create Account with MongoDB Atlas) */}
+      <AuthModal />
+
+      {/* Atlas Connection & Diagnostics Modal */}
+      <AtlasConnectionModal />
+
       {/* Floating Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-2xl shadow-xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5">
@@ -259,6 +295,14 @@ export function App() {
         </div>
       )}
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <TripPlannerMain />
+    </AuthProvider>
   );
 }
 

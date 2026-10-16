@@ -1,13 +1,25 @@
-# Trip Planner — Responsive Travel Planning & Expense Management Web App
+# Trip Planner — Travel Planning & Expense Management Web App with MongoDB Atlas
 
-A modern, responsive travel-planning web application built with **React 19**, **TypeScript**, **Vite**, **Tailwind CSS (v4)**, and **Lucide React**.
+A modern, responsive travel-planning web application built with **React 19**, **TypeScript**, **Vite**, **Tailwind CSS (v4)**, **Node.js/Express**, and **MongoDB Atlas**.
 
-This is a **100% frontend-only MVP**:
-- **Zero Login / Authentication Friction**
-- **Zero Backend / Database Requirements**
-- **Zero Paid APIs** (Uses free, open **Open-Meteo** geocoding & forecast endpoints)
-- **Local Persistence** via browser `localStorage`
-- **Instant VS Code Compatibility**
+---
+
+## 🔐 New: MongoDB Atlas Integration & Authentication
+
+### 1. Modern Login & Registration Experience
+- **Sign In & Create Account Tabs**: Seamless switching with smooth transitions.
+- **Password Strength Analyzer**: Real-time evaluation (Weak, Fair, Strong) with visual progress feedback.
+- **Show/Hide Password**: Convenient visibility toggle button.
+- **Quick Demo Login**: 1-click test credentials autofill (`demo.traveler@tripplanner.com`).
+- **Secure Password Hashing**: Passwords are encrypted server-side using `bcryptjs` with salt rounds.
+- **JWT Authentication**: Secure Bearer tokens with 7-day expiration.
+- **User Profile Dropdown**: Shows logged-in user avatar, MongoDB Atlas sync status, and sign-out action.
+
+### 2. MongoDB Atlas Cloud Integration
+- **Live Connection Diagnostics**: Shows cluster host, active database, ping latency (ms), and connection health.
+- **Atlas Setup & Testing Modal**: Built-in modal to test custom MongoDB Atlas URIs live and view a 4-step setup guide.
+- **Cloud Trip Sync**: Authenticated users can save and synchronize their travel itineraries and expense budgets directly to MongoDB Atlas.
+- **Resilient Fallback**: If the MongoDB Atlas cluster or server is offline, the app continues to operate smoothly using local storage with clear status notifications.
 
 ---
 
@@ -31,13 +43,11 @@ This is a **100% frontend-only MVP**:
 - Displays opening hours, estimated duration, price/free access, and distance.
 - Highlights items matching your personal travel interests.
 - **"Save to Itinerary / Wishlist"** toggle with real-time counter.
-- Transparently labeled with **SAMPLE DATA** tags.
 
 ### 4. Live Open-Meteo Weather Outlook
 - Directly queries Open-Meteo's geocoding and 7-day live weather forecast APIs.
 - Displays current temperature, weather condition icon, daily highs/lows, precipitation risk (%), and wind speed.
 - Toggle between **°C (Celsius)** and **°F (Fahrenheit)**.
-- **Helpful Out-of-Range Handling**: If travel dates exceed Open-Meteo's 14-day forecast window or are in the past, displays a friendly explanation and **never invents fake weather**. Includes a shortcut to view today's live 7-day forecast.
 
 ### 5. Real-Time Budget & Expense Tracker
 - **Budget KPI Bar**: Total Budget, Total Spent, and Remaining Budget with color-coded warning alerts when approaching or exceeding limits.
@@ -46,17 +56,43 @@ This is a **100% frontend-only MVP**:
 - **Expense Logging Form**: Add expenses with description, amount, category, and date.
 - **Interactive List & Management**: Filter by category, delete individual expenses, clear all, and **Export to CSV**.
 
-### 6. LocalStorage Persistence & Demo Reset
-- Trip plans and expenses automatically save to browser `localStorage`.
-- Includes a **"Reset Demo"** button in the navigation header to quickly restore the default showcase scenario.
-
 ---
 
-## 🚀 Getting Started in VS Code
+## 🚀 Getting Started
 
-### Prerequisites
-- Node.js (v18+)
-- Package manager: `pnpm`, `npm`, or `yarn`
+### 1. Installation
+```bash
+npm install
+```
+*(or `pnpm install`)*
+
+### 2. Configure MongoDB Atlas (.env)
+Open `.env` (or copy from `.env.example`) and insert your MongoDB Atlas URI:
+```env
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/tripplanner?retryWrites=true&w=majority
+JWT_SECRET=super_secure_jwt_token_secret_trip_planner_atlas_2025
+PORT=5000
+```
+
+> **Tip**: Make sure your MongoDB Atlas cluster has **Network Access** set to allow `0.0.0.0/0` (or your current IP) and a database user is created in **Database Access**.
+
+### 3. Run the Application
+To run both the **Vite frontend** and **Express MongoDB Atlas backend** simultaneously:
+```bash
+npm run dev:all
+```
+
+Or run them in separate terminal windows:
+```bash
+# Terminal 1: Backend Express Server (port 5000)
+npm run server
+
+# Terminal 2: Vite React Frontend (port 5173)
+npm run dev
+```
+
+Visit **http://localhost:5173** in your browser!
+
 
 ### Quick Start
 ```bash
