@@ -22,7 +22,21 @@ export interface AuthResponse {
   token?: string;
   user?: User;
   isDbOffline?: boolean;
+  isRateLimited?: boolean;
+  retryAfter?: number;
   error?: string;
+}
+
+export interface ForgotPasswordResponse {
+  success: boolean;
+  message: string;
+  resetToken?: string;
+  instructions?: string;
+}
+
+export interface ResetPasswordResponse {
+  success: boolean;
+  message: string;
 }
 
 export interface LoginFormData {

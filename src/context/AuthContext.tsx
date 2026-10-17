@@ -1,42 +1,53 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, AtlasStatus, AuthResponse } from '../types/auth';
+import { User, AtlasStatus, AuthResponse, ForgotPasswordResponse, ResetPasswordResponse } from '../types/auth';
 import {
   loginUser,
   registerUser,
+  logoutUser,
   fetchCurrentUser,
+  requestForgotPassword,
+  resetPassword,
   fetchAtlasStatus,
   testAtlasConnection,
   syncTripToAtlas,
 } from '../services/apiClient';
 import { TripPlan, Expense } from '../types/trip';
 
+export type AuthMode = 'login' | 'register' | 'forgot-password' | 'reset-password';
+
+const TOKEN_KEY = 'trip_planner_auth_token';
+const USER_KEY = 'trip_planner_auth_user';
+
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   atlasStatus: AtlasStatus | null;
   isCheckingAtlas: boolean;
   isAuthModalOpen: boolean;
-  authModalMode: 'login' | 'register';
-  isAtlasModalOpen: boolean;
+  authModalMode: AuthMode;
+  resetTokenParam: string;
+  currentPath: string;
+  navigateTo: (path: string) => void;
   openLoginModal: () => void;
   openRegisterModal: () => void;
+  openForgotPasswordModal: () => void;
+  openResetPasswordModal: (token?: string) => void;
   closeAuthModal: () => void;
   openAtlasModal: () => void;
   closeAtlasModal: () => void;
+  isAtlasModalOpen: boolean;
   login: (email: string, password: string) => Promise<AuthResponse>;
   register: (name: string, email: string, password: string) => Promise<AuthResponse>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<ForgotPasswordResponse>;
+  resetUserPassword: (token: string, password: string) => Promise<ResetPasswordResponse>;
   refreshAtlasStatus: () => Promise<void>;
   testUri: (uri: string) => Promise<{ success: boolean; message: string; data?: AtlasStatus }>;
   syncTrip: (trip: TripPlan, expenses: Expense[]) => Promise<{ success: boolean; message: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const TOKEN_KEY = 'trip_planner_auth_token';
-const USER_KEY = 'trip_planner_auth_user';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
@@ -48,17 +59,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem(TOKEN_KEY);
-  });
-
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [atlasStatus, setAtlasStatus] = useState<AtlasStatus | null>(null);
   const [isCheckingAtlas, setIsCheckingAtlas] = useState<boolean>(false);
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
+  const [authModalMode, setAuthModalMode] = useState<AuthMode>('login');
+  const [resetTokenParam, setResetTokenParam] = useState<string>('');
   const [isAtlasModalOpen, setIsAtlasModalOpen] = useState(false);
+
+  // Track browser path for URL-based navigation
+  const [currentPath, setCurrentPath] = useState<string>(() => {
+    return window.location.pathname || '/';
+  });
+
+  const navigateTo = useCallback((path: string) => {
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path);
+    }
+    setCurrentPath(path);
+  }, []);
+
+  // Listen to popstate (back/forward buttons)
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname || '/');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Check URL parameters on mount (e.g. /reset-password?token=xxx)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      setResetTokenParam(token);
+    }
+  }, []);
 
   const refreshAtlasStatus = useCallback(async () => {
     setIsCheckingAtlas(true);
@@ -67,14 +105,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.success && res.data) {
         setAtlasStatus(res.data);
       } else {
-        setAtlasStatus((prev) => ({
+        setAtlasStatus({
           isConnected: false,
           clusterHost: null,
           databaseName: null,
           error: res.message || 'Atlas status unavailable',
           lastPingMs: null,
           lastChecked: new Date().toISOString(),
-        }));
+        });
       }
     } catch (e: any) {
       setAtlasStatus({
@@ -90,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Check current session & Atlas health on mount
+  // Verify authentication session via HttpOnly cookie or token on mount
   useEffect(() => {
     let isMounted = true;
 
@@ -98,27 +136,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(true);
       await refreshAtlasStatus();
 
-      const savedToken = localStorage.getItem(TOKEN_KEY);
-      if (savedToken) {
-        try {
-          const res = await fetchCurrentUser();
-          if (res.success && res.user && isMounted) {
-            setUser(res.user);
-            localStorage.setItem(USER_KEY, JSON.stringify(res.user));
-          } else if (isMounted) {
-            // Token is expired or invalid
-            localStorage.removeItem(TOKEN_KEY);
-            localStorage.removeItem(USER_KEY);
-            setToken(null);
-            setUser(null);
-          }
-        } catch {
-          // Keep cached user if offline
+      try {
+        const res = await fetchCurrentUser();
+        if (res.success && res.user && isMounted) {
+          setUser(res.user);
+          localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+        } else if (isMounted && res.success === false && !res.isDbOffline) {
+          // Token is definitively invalid or expired
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+          setUser(null);
         }
-      }
-
-      if (isMounted) {
-        setIsLoading(false);
+      } catch {
+        // Keep cached state if network issue
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     }
 
@@ -139,6 +171,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(true);
   };
 
+  const openForgotPasswordModal = () => {
+    setAuthModalMode('forgot-password');
+    setIsAuthModalOpen(true);
+  };
+
+  const openResetPasswordModal = (token?: string) => {
+    if (token) setResetTokenParam(token);
+    setAuthModalMode('reset-password');
+    setIsAuthModalOpen(true);
+  };
+
   const closeAuthModal = () => {
     setIsAuthModalOpen(false);
   };
@@ -155,12 +198,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await loginUser(email, password);
-      if (res.success && res.token && res.user) {
-        setToken(res.token);
+      if (res.success && res.user) {
         setUser(res.user);
-        localStorage.setItem(TOKEN_KEY, res.token);
+        if (res.token) {
+          localStorage.setItem(TOKEN_KEY, res.token);
+        }
         localStorage.setItem(USER_KEY, JSON.stringify(res.user));
         closeAuthModal();
+        if (currentPath === '/login' || currentPath === '/signup') {
+          navigateTo('/');
+        }
       }
       return res;
     } finally {
@@ -172,12 +219,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await registerUser(name, email, password);
-      if (res.success && res.token && res.user) {
-        setToken(res.token);
+      if (res.success && res.user) {
         setUser(res.user);
-        localStorage.setItem(TOKEN_KEY, res.token);
+        if (res.token) {
+          localStorage.setItem(TOKEN_KEY, res.token);
+        }
         localStorage.setItem(USER_KEY, JSON.stringify(res.user));
         closeAuthModal();
+        if (currentPath === '/login' || currentPath === '/signup') {
+          navigateTo('/');
+        }
       }
       return res;
     } finally {
@@ -185,11 +236,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      await logoutUser();
+    } catch {
+      // Clean up local state regardless of network response
+    }
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    setUser(null);
+  };
+
+  const forgotPassword = async (email: string): Promise<ForgotPasswordResponse> => {
+    return requestForgotPassword(email);
+  };
+
+  const resetUserPassword = async (token: string, password: string): Promise<ResetPasswordResponse> => {
+    return resetPassword(token, password);
   };
 
   const testUri = async (uri: string) => {
@@ -206,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const syncTrip = async (trip: TripPlan, expenses: Expense[]) => {
-    if (!token) {
+    if (!user) {
       openLoginModal();
       return { success: false, message: 'Please sign in to sync your trip with MongoDB Atlas.' };
     }
@@ -217,22 +280,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
-        token,
-        isAuthenticated: !!user && !!token,
+        isAuthenticated: !!user,
         isLoading,
         atlasStatus,
         isCheckingAtlas,
         isAuthModalOpen,
         authModalMode,
-        isAtlasModalOpen,
+        resetTokenParam,
+        currentPath,
+        navigateTo,
         openLoginModal,
         openRegisterModal,
+        openForgotPasswordModal,
+        openResetPasswordModal,
         closeAuthModal,
         openAtlasModal,
         closeAtlasModal,
+        isAtlasModalOpen,
         login,
         register,
         logout,
+        forgotPassword,
+        resetUserPassword,
         refreshAtlasStatus,
         testUri,
         syncTrip,

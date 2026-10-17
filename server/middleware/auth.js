@@ -3,44 +3,75 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secure_jwt_token_secret_trip_planner_atlas_2025';
 
 /**
- * Lightweight cookie parser to extract HttpOnly session tokens without external dependencies
+ * Parse cookies safely from the Cookie request header
  */
-function extractCookie(cookieHeader, name) {
-  if (!cookieHeader) return null;
-  const match = cookieHeader.match(new RegExp(`(^|;\\s*)${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[2]) : null;
+function parseCookies(cookieHeader) {
+  const list = {};
+  if (!cookieHeader) return list;
+
+  cookieHeader.split(';').forEach((cookie) => {
+    let [name, ...rest] = cookie.split('=');
+    name = name?.trim();
+    if (!name) return;
+    const value = rest.join('=').trim();
+    if (!value) return;
+    list[name] = decodeURIComponent(value);
+  });
+
+  return list;
 }
 
 /**
- * Authenticate requests using HttpOnly session cookie or Authorization Bearer header
+ * Middleware to authenticate requests using HttpOnly cookie or Authorization Bearer header
  */
 export function authenticateToken(req, res, next) {
-  // 1. Check HttpOnly cookie first
-  let token = extractCookie(req.headers.cookie, 'token');
+  const cookies = parseCookies(req.headers.cookie);
+  let token = cookies.token || cookies.session_token;
 
-  // 2. Fall back to Authorization: Bearer <token> header
+  // Fallback: Authorization header (Bearer <token>)
   if (!token) {
     const authHeader = req.headers['authorization'];
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
+      token = authHeader.substring(7).trim();
     }
   }
 
   if (!token) {
     return res.status(401).json({
       success: false,
-      message: 'Authentication required. Please sign in to continue.',
+      message: 'Authentication required. Please sign in to access this resource.',
     });
   }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // Contains { id, email, name }
+    if (!decoded || !decoded.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid session payload. Please sign in again.',
+      });
+    }
+
+    // Attach user payload to request
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+      name: decoded.name,
+    };
+
     next();
   } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        isExpired: true,
+        message: 'Your session has expired. Please sign in again.',
+      });
+    }
+
     return res.status(401).json({
       success: false,
-      message: 'Your session has expired or is invalid. Please sign in again.',
+      message: 'Invalid authentication credentials. Please sign in again.',
     });
   }
 }

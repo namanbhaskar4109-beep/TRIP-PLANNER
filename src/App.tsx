@@ -23,8 +23,9 @@ import { ExpenseTracker } from './components/expenses/ExpenseTracker';
 import { Footer } from './components/common/Footer';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthModal } from './components/auth/AuthModal';
+import { AuthPage } from './components/auth/AuthPage';
 import { AtlasConnectionModal } from './components/auth/AtlasConnectionModal';
-import { CheckCircle2, X, Cloud, ArrowUpRight, Database } from 'lucide-react';
+import { CheckCircle2, X } from 'lucide-react';
 import { fetchLatestAtlasTrip } from './services/apiClient';
 
 function TripPlannerMain() {
@@ -33,7 +34,7 @@ function TripPlannerMain() {
   const [isEditingTrip, setIsEditingTrip] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const { isAuthenticated, user, atlasStatus, openAtlasModal } = useAuth();
+  const { isAuthenticated, user, currentPath } = useAuth();
   const searchFormRef = useRef<HTMLDivElement>(null);
 
   // Sync to localStorage whenever state changes
@@ -58,7 +59,7 @@ function TripPlannerMain() {
     setToastMessage(msg);
   };
 
-  // If user signs in and has a saved trip in MongoDB Atlas, offer to load it
+  // If user signs in and has a saved trip in MongoDB Atlas, offer welcome notice
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -69,8 +70,8 @@ function TripPlannerMain() {
         if (res.success && res.data && isSubscribed) {
           showToast(`Welcome back, ${user?.name || 'Traveler'}! Cloud sync active.`);
         }
-      } catch (err) {
-        // Silent fallback
+      } catch {
+        // Fallback silently
       }
     }
 
@@ -79,6 +80,20 @@ function TripPlannerMain() {
       isSubscribed = false;
     };
   }, [isAuthenticated, user]);
+
+  // URL-based page routing for standalone /login, /signup, /forgot-password, /reset-password
+  if (currentPath === '/login') {
+    return <AuthPage initialMode="login" />;
+  }
+  if (currentPath === '/signup') {
+    return <AuthPage initialMode="register" />;
+  }
+  if (currentPath === '/forgot-password') {
+    return <AuthPage initialMode="forgot-password" />;
+  }
+  if (currentPath === '/reset-password') {
+    return <AuthPage initialMode="reset-password" />;
+  }
 
   // Generate sample data based on current destination
   const accommodations = useMemo(() => {
@@ -275,7 +290,7 @@ function TripPlannerMain() {
       {/* Footer */}
       <Footer />
 
-      {/* Auth Modal (Sign In / Create Account with MongoDB Atlas) */}
+      {/* Auth Modal (Sign In / Create Account / Reset with MongoDB Atlas) */}
       <AuthModal />
 
       {/* Atlas Connection & Diagnostics Modal */}
@@ -288,7 +303,7 @@ function TripPlannerMain() {
           <span>{toastMessage}</span>
           <button
             onClick={() => setToastMessage(null)}
-            className="ml-2 text-slate-400 hover:text-white transition"
+            className="ml-2 text-slate-400 hover:text-white transition cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>

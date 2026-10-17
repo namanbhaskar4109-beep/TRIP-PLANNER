@@ -24,7 +24,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ currentTrip, currentExpenses
   const [isSyncing, setIsSyncing] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close when clicking outside
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -54,6 +54,17 @@ export const UserMenu: React.FC<UserMenuProps> = ({ currentTrip, currentExpenses
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await logout();
+      onToast('Signed out successfully.');
+    } catch {
+      onToast('Signed out.');
+    } finally {
+      setIsOpen(false);
+    }
+  };
+
   const isConnected = atlasStatus?.isConnected;
 
   return (
@@ -61,7 +72,9 @@ export const UserMenu: React.FC<UserMenuProps> = ({ currentTrip, currentExpenses
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition shadow-2xs"
+        className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+        aria-expanded={isOpen}
+        aria-label="User profile menu"
       >
         <div className="relative">
           <img
@@ -106,7 +119,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ currentTrip, currentExpenses
                   }`}
                 />
                 <span className="text-[10px] text-slate-500 font-medium">
-                  {isConnected ? 'MongoDB Atlas Connected' : 'Atlas Config Needed'}
+                  {isConnected ? 'MongoDB Atlas Connected' : 'Atlas Offline'}
                 </span>
               </div>
             </div>
@@ -117,7 +130,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ currentTrip, currentExpenses
             <button
               onClick={handleSyncToAtlas}
               disabled={isSyncing}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition cursor-pointer"
             >
               {isSyncing ? (
                 <Loader2 className="w-4 h-4 text-teal-600 animate-spin" />
@@ -132,7 +145,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({ currentTrip, currentExpenses
                 setIsOpen(false);
                 openAtlasModal();
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition"
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition cursor-pointer"
             >
               <Database className="w-4 h-4 text-emerald-600" />
               <span>MongoDB Atlas Status</span>
@@ -145,12 +158,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({ currentTrip, currentExpenses
           {/* Sign Out */}
           <div className="p-2">
             <button
-              onClick={() => {
-                logout();
-                setIsOpen(false);
-                onToast('Signed out successfully.');
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition"
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
               <span>Sign Out</span>
